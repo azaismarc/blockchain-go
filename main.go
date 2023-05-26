@@ -88,33 +88,34 @@ func genesis(challenge int) *Blockchain {
 	return &Blockchain{challenge, []*Block{mine(challenge, []byte{}, "Genesis")}, sync.RWMutex{}}
 }
 
-func computer(id int, bc *Blockchain) {
-	for i := 0; i < 2; i++ {
-		data := fmt.Sprintf("Block %d by %d", i, id)
-		for !bc.addBlock(data) {
-			fmt.Printf("Retrying : %s\n", data)
+func computer(id int, bc *Blockchain, data string, done chan<- bool) {
+	data = fmt.Sprintf("Thread %d %s", id, data)
+	for {
+		if bc.addBlock(data) {
+			done <- true
 		}
 	}
 }
 
 func main() {
-	bc := genesis(1)
-	var wg sync.WaitGroup
+	bc := genesis(2)
+
+	nBlockArg := os.Args[2]
+	nBlock, _ := strconv.Atoi(nBlockArg)
+
+	done := make(chan bool, nBlock)
 	arg := os.Args[1]
 	threads, _ := strconv.Atoi(arg)
 
-	wg.Add(threads)
-
 	for i := 0; i < threads; i++ {
-		go func(id int) {
-			computer(id, bc)
-			wg.Done()
-		}(i)
+		go computer(i, bc, "", done)
 	}
 
-	wg.Wait()
+	for i := 0; i < nBlock; i++ {
+		<-done
+	}
 
-	fmt.Println(bc)
+	fmt.Println(bc, "\n", len(bc.blocks))
 
 	if bc.validateAll() {
 		fmt.Println("Validated")
